@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="te">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Telugu Poem Reader</title>
+
+  <!-- Google Fonts: Noto Sans Telugu -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans+Telugu:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- Tesseract.js -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <!-- PDF.js -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs" type="module"></script>
+
+  <style>
+    /* ── Reset & Base ──────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #faf8f5;
+      --surface:   #ffffff;
+      --border:    #e8e2d9;
+      --text:      #2c2520;
+      --text-muted:#8a7e72;
+      --accent:    #6b5b4f;
+      --accent-light: #f0ebe5;
+      --highlight: #fff3cd;
+      --primary:   #7c6f64;
+      --primary-hover: #5c5046;
+      --danger:    #c0392b;
+      --success:   #27ae60;
+      --radius:    12px;
+      --shadow:    0 2px 12px rgba(0,0,0,0.06);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.10);
+      --font-ui:   'Inter', sans-serif;
+      --font-telugu: 'Noto Sans Telugu', sans-serif;
+      --transition: 0.25s ease;
+    }
+
+    html { font-size: 16px; scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.6;
+    }
+
+    /* ── Header ────────────────────────────────────────────── */
+    header {
+      text-align: center;
+      padding: 2.5rem 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    header h1 {
+      font-family: var(--font-telugu);
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
+    }
+
+    /* ── Main Container ────────────────────────────────────── */
+    main {
+      flex: 1;
+      max-width: 780px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+
+    section { margin-bottom: 2rem; }
+
+    /* ── Drop Zone ─────────────────────────────────────────── */
+    #drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      background: var(--surface);
+      transition: border-color var(--transition), background var(--transition);
+      position: relative;
+    }
+
+    #drop-zone.drag-over {
+      border-color: var(--primary);
+      background: var(--accent-light);
+    }
+
+    #drop-zone .icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+      display: block;
+      opacity: 0.5;
+    }
+
+    #drop-zone .label {
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--accent);
+    }
+
+    #drop-zone .sublabel {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-top: 0.3rem;
+    }
+
+    #file-input { display: none; }
+
+    /* ── Progress ──────────────────────────────────────────── */
+    #progress-section {
+      display: none;
+      text-align: center;
+      padding: 2rem 1rem;
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    #progress-section.visible { display: block; }
+
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #progress-text {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    #progress-bar-container {
+      width: 100%;
+      max-width: 360px;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+
+    #progress-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--primary);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    /* ── Result Section ────────────────────────────────────── */
+    #result-section {
+      display: none;
+    }
+
+    #result-section.visible { display: block; }
+
+    #result-section h2 {
+      font-family: var(--font-telugu);
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+    }
+
+    #text-display {
+      font-family: var(--font-telugu);
+      font-size: 1.35rem;
+      line-height: 2.2;
+      width: 100%;
+      min-height: 200px;
+      padding: 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      resize: vertical;
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+
+    #text-display:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(124,111,100,0.12);
+    }
+
+    /* ── Playback Controls ─────────────────────────────────── */
+    #playback-section {
+      display: none;
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1.25rem 1.5rem;
+    }
+
+    #playback-section.visible { display: block; }
+
+    .controls-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      padding: 0.55rem 1.1rem;
+      border: none;
+      border-radius: 8px;
+      font-family: var(--font-ui);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background var(--transition), transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .btn:active { transform: scale(0.96); }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn-primary:hover { background: var(--primary-hover); }
+
+    .btn-secondary {
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+
+    .btn-secondary:hover { background: #e4ddd4; }
+
+    .btn-danger {
+      background: #fdecea;
+      color: var(--danger);
+    }
+
+    .btn-danger:hover { background: #f8d7da; }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .speed-control {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-left: auto;
+    }
+
+    .speed-control label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    #speed-slider {
+      width: 90px;
+      accent-color: var(--primary);
+    }
+
+    #speed-value {
+      font-size: 0.8rem;
+      color: var(--accent);
+      font-weight: 600;
+      min-width: 2.2em;
+      text-align: center;
+    }
+
+    /* ── Voice Warning ─────────────────────────────────────── */
+    #voice-warning {
+      display: none;
+      padding: 0.85rem 1rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      margin-top: 0.75rem;
+    }
+
+    #voice-warning.warn {
+      display: block;
+      background: #fff8e1;
+      color: #8b6914;
+      border: 1px solid #f0dfa0;
+    }
+
+    #voice-warning.error {
+      display: block;
+      background: #fdecea;
+      color: var(--danger);
+      border: 1px solid #f1b5b0;
+    }
+
+    /* ── Highlighted line ──────────────────────────────────── */
+    .line-highlight {
+      background: var(--highlight);
+      border-radius: 3px;
+    }
+
+    /* ── Error Toast ───────────────────────────────────────── */
+    #error-toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(120%);
+      background: #3b2f2f;
+      color: #fff;
+      padding: 0.75rem 1.25rem;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      box-shadow: var(--shadow-lg);
+      z-index: 1000;
+      transition: transform 0.35s ease;
+      max-width: 90%;
+      text-align: center;
+    }
+
+    #error-toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── Footer ────────────────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 1.25rem 1rem;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── New File Button ───────────────────────────────────── */
+    #new-file-btn {
+      display: none;
+      margin-bottom: 1.5rem;
+    }
+
+    #new-file-btn.visible { display: inline-flex; }
+
+    /* ── Responsive ────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      header h1 { font-size: 1.5rem; }
+      main { padding: 1.25rem 1rem 3rem; }
+      #drop-zone { padding: 2rem 1rem; }
+      #text-display { font-size: 1.15rem; line-height: 2; }
+      .controls-row { gap: 0.4rem; }
+      .speed-control { margin-left: 0; width: 100%; margin-top: 0.5rem; }
+      .btn { padding: 0.5rem 0.85rem; font-size: 0.8rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>తెలుగు కవిత పఠనం</h1>
+  <p>Telugu Poem Reader &mdash; Upload an image or PDF to extract and hear Telugu poetry</p>
+</header>
+
+<main>
+  <!-- Upload -->
+  <section id="upload-section">
+    <button id="new-file-btn" class="btn btn-secondary" onclick="resetApp()">&#8592; Upload another file</button>
+    <div id="drop-zone" tabindex="0" role="button" aria-label="Upload a file">
+      <span class="icon">&#128220;</span>
+      <div class="label">Drag &amp; drop an image or PDF here</div>
+      <div class="sublabel">or click to choose a file &middot; PNG, JPG, PDF supported</div>
+    </div>
+    <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,application/pdf" />
+  </section>
+
+  <!-- Progress -->
+  <section id="progress-section">
+    <div class="spinner"></div>
+    <div id="progress-text">Initializing OCR engine&hellip;</div>
+    <div id="progress-bar-container">
+      <div id="progress-bar"></div>
+    </div>
+  </section>
+
+  <!-- Result -->
+  <section id="result-section">
+    <h2>&#128214; Extracted Text</h2>
+    <textarea id="text-display" spellcheck="false" placeholder="Extracted Telugu text will appear here. You can edit it before playback."></textarea>
+  </section>
+
+  <!-- Playback -->
+  <section id="playback-section">
+    <div class="controls-row">
+      <button class="btn btn-primary" id="btn-play" onclick="doPlay()" disabled>&#9654; Play</button>
+      <button class="btn btn-secondary" id="btn-pause" onclick="doPause()" disabled>&#10074;&#10074; Pause</button>
+      <button class="btn btn-danger" id="btn-stop" onclick="doStop()" disabled>&#9632; Stop</button>
+      <div class="speed-control">
+        <label for="speed-slider">Speed</label>
+        <input type="range" id="speed-slider" min="0.5" max="2" step="0.1" value="1" oninput="updateSpeedLabel()" />
+        <span id="speed-value">1.0x</span>
+      </div>
+    </div>
+    <div id="voice-warning"></div>
+  </section>
+</main>
+
+<footer>
+  Telugu Poem Reader &middot; All processing runs locally in your browser
+</footer>
+
+<div id="error-toast"></div>
+
+<script type="module">
+  /* ── PDF.js Setup ───────────────────────────────────────── */
+  const pdfjsLib = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs';
+
+  /* ── DOM refs ───────────────────────────────────────────── */
+  const dropZone       = document.getElementById('drop-zone');
+  const fileInput      = document.getElementById('file-input');
+  const progressSec    = document.getElementById('progress-section');
+  const progressText   = document.getElementById('progress-text');
+  const progressBar    = document.getElementById('progress-bar');
+  const resultSec      = document.getElementById('result-section');
+  const textDisplay    = document.getElementById('text-display');
+  const playbackSec    = document.getElementById('playback-section');
+  const btnPlay        = document.getElementById('btn-play');
+  const btnPause       = document.getElementById('btn-pause');
+  const btnStop        = document.getElementById('btn-stop');
+  const speedSlider    = document.getElementById('speed-slider');
+  const speedValue     = document.getElementById('speed-value');
+  const voiceWarning   = document.getElementById('voice-warning');
+  const errorToast     = document.getElementById('error-toast');
+  const newFileBtn     = document.getElementById('new-file-btn');
+  const uploadSection  = document.getElementById('upload-section');
+
+  /* ── State ──────────────────────────────────────────────── */
+  let currentUtterance = null;
+  let teluguVoice      = null;
+  let hasTeluguVoice   = false;
+  let isSpeaking       = false;
+  let isPaused         = false;
+
+  /* ── Drag & Drop / Click ────────────────────────────────── */
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+  });
+
+  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const files = e.dataTransfer.files;
+    if (files.length) handleFile(files[0]);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) handleFile(fileInput.files[0]);
+  });
+
+  /* ── File Handling ──────────────────────────────────────── */
+  async function handleFile(file) {
+    const validTypes = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
+    if (!validTypes.includes(file.type)) {
+      showError('Unsupported file type. Please upload a PNG, JPG, or PDF.');
+      return;
+    }
+
+    showProgress();
+
+    try {
+      let images = [];
+
+      if (file.type === 'application/pdf') {
+        images = await pdfToImages(file);
+      } else {
+        images = [await fileToImageData(file)];
+      }
+
+      const allText = [];
+      for (let i = 0; i < images.length; i++) {
+        const pageLabel = images.length > 1 ? ` (page ${i + 1}/${images.length})` : '';
+        progressText.textContent = `Running OCR${pageLabel}…`;
+        const text = await runOCR(images[i]);
+        if (text.trim()) allText.push(text.trim());
+      }
+
+      const combinedText = allText.join('\n\n');
+      if (!combinedText.trim()) {
+        showError('No Telugu text could be extracted. Try a clearer image.');
+        hideProgress();
+        return;
+      }
+
+      textDisplay.value = combinedText;
+      hideProgress();
+      showResult();
+      initVoices();
+
+    } catch (err) {
+      console.error(err);
+      showError('OCR failed: ' + (err.message || 'Unknown error'));
+      hideProgress();
+    }
+  }
+
+  /* ── PDF → Canvas images ────────────────────────────────── */
+  async function pdfToImages(file) {
+    progressText.textContent = 'Loading PDF…';
+    const arrayBuf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+    const images = [];
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      progressText.textContent = `Rendering PDF page ${i}/${pdf.numPages}…`;
+      const page = await pdf.getPage(i);
+      const scale = 2;
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width  = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      images.push(canvas);
+    }
+
+    return images;
+  }
+
+  /* ── File → Image element ───────────────────────────────── */
+  function fileToImageData(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width  = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas);
+      };
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  /* ── Tesseract OCR ──────────────────────────────────────── */
+  async function runOCR(canvas) {
+    const worker = await Tesseract.createWorker('tel', 1, {
+      logger: (m) => {
+        if (m.status === 'recognizing text') {
+          const pct = Math.round((m.progress || 0) * 100);
+          progressBar.style.width = pct + '%';
+          progressText.textContent = `Recognizing Telugu text… ${pct}%`;
+        }
+      }
+    });
+
+    const { data: { text } } = await worker.recognize(canvas);
+    await worker.terminate();
+    return text;
+  }
+
+  /* ── UI Helpers ─────────────────────────────────────────── */
+  function showProgress() {
+    progressSec.classList.add('visible');
+    resultSec.classList.remove('visible');
+    playbackSec.classList.remove('visible');
+    dropZone.style.display = 'none';
+    newFileBtn.classList.remove('visible');
+    progressBar.style.width = '0%';
+    progressText.textContent = 'Initializing OCR engine…';
+  }
+
+  function hideProgress() {
+    progressSec.classList.remove('visible');
+  }
+
+  function showResult() {
+    resultSec.classList.add('visible');
+    playbackSec.classList.add('visible');
+    newFileBtn.classList.add('visible');
+    btnPlay.disabled = false;
+  }
+
+  function showError(msg) {
+    errorToast.textContent = msg;
+    errorToast.classList.add('show');
+    setTimeout(() => errorToast.classList.remove('show'), 5000);
+  }
+
+  /* ── Reset ──────────────────────────────────────────────── */
+  window.resetApp = function () {
+    doStop();
+    resultSec.classList.remove('visible');
+    playbackSec.classList.remove('visible');
+    newFileBtn.classList.remove('visible');
+    dropZone.style.display = '';
+    fileInput.value = '';
+    textDisplay.value = '';
+    voiceWarning.className = '';
+    voiceWarning.style.display = 'none';
+  };
+
+  /* ── Voice Initialization ───────────────────────────────── */
+  function initVoices() {
+    const trySelect = () => {
+      const voices = speechSynthesis.getVoices();
+      teluguVoice = voices.find(v => v.lang && v.lang.startsWith('te'));
+      hasTeluguVoice = !!teluguVoice;
+
+      if (!teluguVoice) {
+        teluguVoice = voices.find(v => v.lang && v.lang.startsWith('hi')) || voices[0] || null;
+      }
+
+      if (!hasTeluguVoice && teluguVoice) {
+        voiceWarning.textContent =
+          'No Telugu (te-IN) voice found on your browser/OS. Using "' +
+          teluguVoice.name + '" as a fallback. For best results, install a Telugu voice pack.';
+        voiceWarning.className = 'warn';
+      } else if (!teluguVoice) {
+        voiceWarning.textContent =
+          'No speech voices are available. Text-to-speech is not supported in this browser.';
+        voiceWarning.className = 'error';
+        btnPlay.disabled = true;
+      }
+    };
+
+    if (speechSynthesis.getVoices().length) {
+      trySelect();
+    } else {
+      speechSynthesis.addEventListener('voiceschanged', trySelect, { once: true });
+      setTimeout(trySelect, 1000);
+    }
+  }
+
+  /* ── TTS Controls ───────────────────────────────────────── */
+  window.doPlay = function () {
+    if (isPaused && isSpeaking) {
+      speechSynthesis.resume();
+      isPaused = false;
+      btnPause.disabled = false;
+      return;
+    }
+
+    const text = textDisplay.value.trim();
+    if (!text) { showError('No text to read aloud.'); return; }
+
+    doStop();
+
+    currentUtterance = new SpeechSynthesisUtterance(text);
+    if (teluguVoice) currentUtterance.voice = teluguVoice;
+    currentUtterance.lang = 'te-IN';
+    currentUtterance.rate = parseFloat(speedSlider.value);
+
+    /* Line highlighting via onboundary */
+    const lines = text.split('\n');
+    currentUtterance.addEventListener('boundary', (e) => {
+      if (e.name === 'word' || e.name === 'sentence') {
+        highlightAtCharIndex(e.charIndex, lines);
+      }
+    });
+
+    currentUtterance.addEventListener('end', () => {
+      isSpeaking = false;
+      isPaused = false;
+      btnPause.disabled = true;
+      btnStop.disabled  = true;
+      clearHighlight();
+    });
+
+    currentUtterance.addEventListener('error', (e) => {
+      if (e.error !== 'interrupted' && e.error !== 'canceled') {
+        showError('Speech error: ' + e.error);
+      }
+      isSpeaking = false;
+      isPaused = false;
+    });
+
+    speechSynthesis.speak(currentUtterance);
+    isSpeaking = true;
+    isPaused = false;
+    btnPause.disabled = false;
+    btnStop.disabled  = false;
+  };
+
+  window.doPause = function () {
+    if (isSpeaking && !isPaused) {
+      speechSynthesis.pause();
+      isPaused = true;
+    }
+  };
+
+  window.doStop = function () {
+    speechSynthesis.cancel();
+    isSpeaking = false;
+    isPaused = false;
+    btnPause.disabled = true;
+    btnStop.disabled  = true;
+    clearHighlight();
+  };
+
+  window.updateSpeedLabel = function () {
+    speedValue.textContent = parseFloat(speedSlider.value).toFixed(1) + 'x';
+  };
+
+  /* ── Line Highlighting ─────────────────────────────────── */
+  function highlightAtCharIndex(charIndex, lines) {
+    let cumulative = 0;
+    let activeLine = -1;
+
+    for (let i = 0; i < lines.length; i++) {
+      const lineEnd = cumulative + lines[i].length;
+      if (charIndex >= cumulative && charIndex <= lineEnd) {
+        activeLine = i;
+        break;
+      }
+      cumulative = lineEnd + 1; // +1 for newline
+    }
+
+    if (activeLine < 0) return;
+
+    /* Scroll the textarea to show the active line region */
+    const ta = textDisplay;
+    const lineHeight = parseFloat(getComputedStyle(ta).lineHeight) || 28;
+    const scrollTarget = activeLine * lineHeight - ta.clientHeight / 3;
+    ta.scrollTop = Math.max(0, scrollTarget);
+
+    /* Select the active line to give a visual highlight */
+    let startPos = 0;
+    for (let i = 0; i < activeLine; i++) startPos += lines[i].length + 1;
+    const endPos = startPos + lines[activeLine].length;
+    ta.setSelectionRange(startPos, endPos);
+    ta.focus();
+  }
+
+  function clearHighlight() {
+    const ta = textDisplay;
+    const len = ta.value.length;
+    ta.setSelectionRange(len, len);
+  }
+</script>
+
+</body>
+</html>
